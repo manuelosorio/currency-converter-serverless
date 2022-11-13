@@ -1,5 +1,4 @@
-import fetch from "node-fetch";
-import { HandlerEvent, HandlerContext, HandlerResponse } from "@netlify/functions"
+const fetch = require('node-fetch');
 
 const API_KEY = process.env.API_KEY;
 
@@ -9,7 +8,7 @@ const API_KEY = process.env.API_KEY;
  * @param _context {HandlerContext}
  * @returns {Promise<HandlerResponse>}
  */
-export const handler = async (event, _context) => {
+exports.handler = async (event, _context) => {
     try {
       let {base, target} = event.queryStringParameters;
       base = !!base ? base : "USD";
