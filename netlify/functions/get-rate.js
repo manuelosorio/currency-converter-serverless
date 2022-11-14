@@ -1,6 +1,21 @@
 const fetch = require('node-fetch');
+const redis = require('redis');
+
 
 const API_KEY = process.env.API_KEY;
+const CACHE_DURATION = process.env.CACHE_DURATION ?? 60 * 15;
+console.log(CACHE_DURATION)// in seconds
+
+const redisConfig = {
+  url: process.env.REDIS_URL,
+  database: Number(process.env.REDIS_DATABASE),
+  password: process.env.REDIS_PASSWORD,
+  username: process.env.REDIS_USERNAME
+}
+
+
+const client = redis.createClient(redisConfig);
+client.connect();
 
 /**
  *
@@ -12,13 +27,33 @@ exports.handler = async (event, _context) => {
     try {
       let {base, target} = event.queryStringParameters;
       base = !!base ? base : "USD";
+      try {
+        /**
+         *
+         * @type {RedisClientType<RedisDefaultModules & RedisModules, RedisFunctions, RedisScripts>}
+         */
+        const redisCache = await client.get(target);
+        if (await redisCache) {
+          return {
+            statusCode: 200,
+            body: redisCache
+          }
+        }
+      } catch (e) {
+        console.error(e);
+        return {
+          statusCode: 400,
+          body: JSON.stringify({errorMessage: "There was a Redis error"})
+        };
+      }
+
       return fetch(`https://exchange-rates.abstractapi.com/v1/live/?api_key=${API_KEY}&base=${base}&target=${target}`, {
         method: 'GET'
       }).catch((err) => {
         console.error(err);
         return {
           statusCode: 400,
-          body: "Something went wrong"
+          body: JSON.stringify({errorMessage: "Something went wrong"})
         };
       }).then(async (res) => {
         /**
@@ -26,14 +61,28 @@ exports.handler = async (event, _context) => {
          * @type { CurrencyDataType }
          */
         const data = await res.json();
-        console.log(data);
+        /**
+         *
+         * @type {string}
+         */
+        const exchangeRateStr = JSON.stringify({rate: data.exchange_rates[target]});
+        client.set(target, exchangeRateStr, {
+          EX: CACHE_DURATION,
+          NX: true
+        })
         return {
           statusCode: 200,
-          body: JSON.stringify(data.exchange_rates[target])
+          body: exchangeRateStr
         };
       });
     } catch (e) {
       console.error(e.message)
+      return {
+        statusCode: 400,
+        body: JSON.stringify({
+          errorMessage: e.message
+        })
+      }
     }
 
 }
