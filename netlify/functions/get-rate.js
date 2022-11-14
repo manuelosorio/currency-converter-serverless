@@ -27,12 +27,13 @@ exports.handler = async (event, _context) => {
     try {
       let {base, target} = event.queryStringParameters;
       base = !!base ? base : "USD";
+      const key = `${base}-${target}`;
       try {
         /**
          *
          * @type {RedisClientType<RedisDefaultModules & RedisModules, RedisFunctions, RedisScripts>}
          */
-        const redisCache = await client.get(target);
+        const redisCache = await client.get(key);
         if (await redisCache) {
           return {
             statusCode: 200,
@@ -66,7 +67,7 @@ exports.handler = async (event, _context) => {
          * @type {string}
          */
         const exchangeRateStr = JSON.stringify({rate: data.exchange_rates[target]});
-        client.set(target, exchangeRateStr, {
+        client.set(key, exchangeRateStr, {
           EX: CACHE_DURATION,
           NX: true
         })
